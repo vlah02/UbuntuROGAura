@@ -113,35 +113,36 @@ class RogAuraBackendNative(QObject):
             lambda aura: aura.apply_custom_color(hex_color)
         )
     
-    def apply_single_effect(self, effect_name: str, hex_color: str = "ffffff") -> bool:
-        if effect_name == "single_static":
-            return self.apply_custom_color(hex_color)
-        else:
-            self.logger.error(f"Unknown single effect: {effect_name}")
-            return False
-    
-    def apply_speed_effect(self, effect_name: str, speed: int = 2) -> bool:
-        if not 1 <= speed <= 3:
-            speed = 2
+    def apply_single_effect(self, effect, color):
+        def operation(conn):
+            if effect == "single_static":
+                return conn.single_static(color_hex=color)
+            else:
+                return False
         
-        if effect_name == "single_breathing":
-            return self._execute_with_connection(
-                f"Single breathing (speed {speed})",
-                lambda aura: aura.single_breathing(speed=speed)
-            )
-        elif effect_name == "single_colorcycle":
-            return self._execute_with_connection(
-                f"Single color cycle (speed {speed})",
-                lambda aura: aura.single_colorcycle(speed=speed)
-            )
-        elif effect_name == "rainbow_cycle":
-            return self._execute_with_connection(
-                f"Rainbow cycle (speed {speed})",
-                lambda aura: aura.rainbow_cycle(speed=speed)
-            )
-        else:
-            self.logger.error(f"Unknown speed effect: {effect_name}")
-            return False
+        return self._execute_with_connection(f"Apply single effect: {effect} with color {color}", operation)
+    
+    def apply_speed_effect(self, effect, speed):
+        def operation(conn):
+            if effect == "single_colorcycle":
+                return conn.single_colorcycle(speed=speed)
+            elif effect == "rainbow_cycle":
+                return conn.rainbow_cycle(speed=speed)
+            elif effect == "single_breathing":
+                return conn.single_breathing(speed=speed)
+            else:
+                return False
+        
+        return self._execute_with_connection(f"Apply speed effect: {effect} (speed {speed})", operation)
+    
+    def apply_speed_effect_with_colors(self, effect, color1, color2, speed):
+        def operation(conn):
+            if effect == "single_breathing":
+                return conn.single_breathing(color1_hex=color1, color2_hex=color2, speed=speed)
+            else:
+                return False
+        
+        return self._execute_with_connection(f"Apply speed effect with colors: {effect} (speed {speed})", operation)
     
     def apply_multi_zone_effect(self, effect_name: str, speed: int = None) -> bool:
         if effect_name == "multi_static":

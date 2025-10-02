@@ -376,3 +376,12 @@ class RogAuraNative:
             return self.usb.rainbow_cycle(speed_enum)
         except ValueError:
             return False
+    
+    def single_static(self, color_hex: str) -> bool:
+        if not self.connected:
+            return False
+        try:
+            color = Color.from_hex(color_hex)
+            return self.usb.single_static(color)
+        except ValueError:
+            return False
