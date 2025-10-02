@@ -2,12 +2,16 @@
 
 import sys
 import os
-from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QSlider, QComboBox, QColorDialog, QGroupBox, QGridLayout, QFrame, QMessageBox, QSizePolicy, QTabWidget
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSettings, QTimer
-from PyQt6.QtGui import QIcon, QPixmap, QPalette, QColor, QFont
+
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QLabel, QPushButton, QSlider, QComboBox,
+    QVBoxLayout, QHBoxLayout, QGroupBox, QGridLayout, QFrame, QSizePolicy, QTabWidget
+)
+from PyQt6.QtCore import Qt, QSettings
+from PyQt6.QtGui import QIcon
 
 from src.native_backend import RogAuraBackendNative
-from src.ui_components import StatusBar
+from src.ui_components import StatusBar, CompactColorPicker
 
 
 class ROGAuraGUI(QMainWindow):
@@ -20,7 +24,7 @@ class ROGAuraGUI(QMainWindow):
         
     def init_ui(self):
         self.setWindowTitle("ROG Aura Core Control")
-        self.setGeometry(100, 100, 900, 700)
+        self.setGeometry(100, 100, 1000, 900)
         self.setMinimumSize(800, 600)
         
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -39,9 +43,7 @@ class ROGAuraGUI(QMainWindow):
         main_layout.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
         
         self.create_title_section(main_layout)
-        
-        self.create_theme_toggle(main_layout)
-        
+
         self.create_brightness_section(main_layout)
         
         self.create_tabbed_effects_section(main_layout)
@@ -67,22 +69,6 @@ class ROGAuraGUI(QMainWindow):
         title_layout.addWidget(title_label)
         title_layout.addWidget(subtitle_label)
         parent_layout.addWidget(title_frame)
-        
-    def create_theme_toggle(self, parent_layout):
-        theme_frame = QFrame()
-        theme_layout = QHBoxLayout(theme_frame)
-        theme_layout.addStretch()
-        
-        theme_label = QLabel("Theme:")
-        self.theme_button = QPushButton("🌙 Dark Mode")
-        self.theme_button.setObjectName("themeButton")
-        self.theme_button.clicked.connect(self.toggle_theme)
-        
-        theme_layout.addWidget(theme_label)
-        theme_layout.addWidget(self.theme_button)
-        theme_layout.addStretch()
-        
-        parent_layout.addWidget(theme_frame)
         
     def create_brightness_section(self, parent_layout):
         brightness_group = QGroupBox("Brightness Control")
@@ -149,57 +135,59 @@ class ROGAuraGUI(QMainWindow):
         
     def create_single_zone_tab(self, tab_widget):
         layout = QVBoxLayout(tab_widget)
-        
-        # Color selection section
-        colors_group = QGroupBox("Color Selection")
-        colors_group.setObjectName("groupBox")
-        colors_layout = QVBoxLayout(colors_group)
-        
-        color_grid_layout = QGridLayout()
-        self.create_color_buttons(color_grid_layout)
-        colors_layout.addLayout(color_grid_layout)
-        
-        selected_color_layout = QHBoxLayout()
-        selected_label = QLabel("Selected Color:")
-        self.selected_color_display = QLabel("White")
-        self.selected_color_display.setObjectName("valueLabel")
-        
-        self.color_picker_btn = QPushButton("Custom Color Picker")
-        self.color_picker_btn.clicked.connect(self.open_color_picker)
-        
-        selected_color_layout.addWidget(selected_label)
-        selected_color_layout.addWidget(self.selected_color_display)
-        selected_color_layout.addStretch()
-        selected_color_layout.addWidget(self.color_picker_btn)
-        
-        colors_layout.addLayout(selected_color_layout)
-        layout.addWidget(colors_group)
-        
-        # Single zone effects section
-        single_effects_group = QGroupBox("Single Zone Effects")
-        single_effects_group.setObjectName("groupBox")
-        single_effects_layout = QVBoxLayout(single_effects_group)
-        
-        effects_layout = QGridLayout()
-        
+
+        single_group = QGroupBox("Single Zone")
+        single_group.setObjectName("groupBox")
+        single_layout = QVBoxLayout(single_group)
+
+        row = QHBoxLayout()
+        row.setSpacing(12)
+
+        self.compact_picker = CompactColorPicker()
+        self.compact_picker.color_selected.connect(self._on_color_selected)
+        row.addWidget(self.compact_picker, 2)  
+        actions = QVBoxLayout()
+        actions.setSpacing(10)
+
+        act_label = QLabel("Actions")
+        act_label.setObjectName("miniSection")
+        actions.addWidget(act_label)
+
         self.single_static_btn = QPushButton("Static Color")
         self.single_breathing_btn = QPushButton("Breathing")
-        
-        effects_layout.addWidget(self.single_static_btn, 0, 0)
-        effects_layout.addWidget(self.single_breathing_btn, 0, 1)
-        
-        single_effects_layout.addLayout(effects_layout)
-        layout.addWidget(single_effects_group)
-        
+
+        self.single_static_btn.setMinimumHeight(36)
+        self.single_breathing_btn.setMinimumHeight(36)
+
+        actions.addWidget(self.single_static_btn)
+        actions.addWidget(self.single_breathing_btn)
+        actions.addStretch()
+
+        row.addLayout(actions, 1)
+
+        single_layout.addLayout(row)
+
+        layout.addWidget(single_group)
         layout.addStretch()
-        
-        self.single_static_btn.clicked.connect(lambda: self.apply_single_effect_with_selected_color("single_static"))
-        self.single_breathing_btn.clicked.connect(lambda: self.apply_single_breathing_with_selected_color())
-        
+
+        self.single_static_btn.clicked.connect(
+            lambda: self.apply_single_effect_with_selected_color("single_static")
+        )
+        self.single_breathing_btn.clicked.connect(self.apply_single_breathing_with_selected_color)
+
+    def _on_color_selected(self, hex_without_hash: str):
+        self.current_selected_color = hex_without_hash.lower()
+        self.current_selected_color_name = f"#{hex_without_hash.upper()}"
+
+        success = self.backend.apply_custom_color(hex_without_hash)
+        if success:
+            self.status_bar.show_message(f"Selected color: #{hex_without_hash.upper()}")
+        else:
+            self.status_bar.show_error(f"Failed to apply color: #{hex_without_hash.upper()}")
+
     def create_multi_zone_tab(self, tab_widget):
         layout = QVBoxLayout(tab_widget)
         
-        # Multi zone effects section
         multi_effects_group = QGroupBox("Multi Zone Effects")
         multi_effects_group.setObjectName("groupBox")
         multi_effects_layout = QVBoxLayout(multi_effects_group)
@@ -365,14 +353,7 @@ class ROGAuraGUI(QMainWindow):
         self.apply_theme()
         
     def apply_theme(self):
-        theme = self.settings.value('theme', 'light')
-        
-        if theme == 'dark':
-            self.theme_button.setText("☀️ Light Mode")
-            self.load_dark_theme()
-        else:
-            self.theme_button.setText("🌙 Dark Mode")
-            self.load_light_theme()
+        self.load_dark_theme()
             
     def load_dark_theme(self):
         with open('styles/dark_theme.qss', 'r') as f:

@@ -1,9 +1,120 @@
-from PyQt6.QtWidgets import (QWidget, QPushButton, QLabel, QSlider, QComboBox, 
-                             QColorDialog, QVBoxLayout, QHBoxLayout, QFrame,
-                             QProgressBar, QTextEdit, QScrollArea, QGroupBox)
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QColor, QPalette, QFont, QPainter, QLinearGradient
+from PyQt6.QtWidgets import (
+    QWidget, QPushButton, QLabel, QLineEdit, QHBoxLayout, QVBoxLayout,
+    QTextEdit, QProgressBar, QComboBox, QSlider, QColorDialog
+)
+from PyQt6.QtCore import (
+    Qt, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve, QRegularExpression
+)
+from PyQt6.QtGui import (
+    QColor, QRegularExpressionValidator, QPainter, QLinearGradient, QFont, QPalette
+)
 
+
+class CompactColorPicker(QWidget):
+    color_selected = pyqtSignal(str)
+
+    def __init__(self, accent="#6EB6FF"):
+        super().__init__()
+        self._accent = accent
+        self._recent: list[str] = []
+        self._build_ui()
+
+    def _build_ui(self):
+        root = QVBoxLayout(self)
+        root.setSpacing(8)
+        root.setContentsMargins(8, 8, 8, 8)
+
+        recent_row = QHBoxLayout()
+        recent_row.setSpacing(6)
+        recent_row.addWidget(self._make_section_label("Recent"))
+        self.recent_wrap = QHBoxLayout()
+        self.recent_wrap.setSpacing(6)
+        recent_row.addLayout(self.recent_wrap)
+        recent_row.addStretch()
+        root.addLayout(recent_row)
+
+        bar = QHBoxLayout()
+        bar.setSpacing(8)
+
+        self.preview = QLabel()
+        self.preview.setObjectName("colorPreview")
+        self.preview.setFixedSize(28, 18)
+        self.preview.setStyleSheet("background:#FFFFFF; border-radius:4px;")
+
+        self.hex_edit = QLineEdit()
+        self.hex_edit.setObjectName("hexField")
+        self.hex_edit.setPlaceholderText("#RRGGBB")
+        self.hex_edit.setFixedWidth(110)
+        rx = QRegularExpression("^#?[0-9A-Fa-f]{6}$")
+        self.hex_edit.setValidator(QRegularExpressionValidator(rx))
+        self.hex_edit.returnPressed.connect(self._apply_hex_from_field)
+
+        self.pick_btn = QPushButton("Pick…")
+        self.pick_btn.setObjectName("pickButton")
+        self.pick_btn.clicked.connect(self._choose_custom_color)
+
+        bar.addWidget(self._make_section_label("Color"))
+        bar.addWidget(self.preview)
+        bar.addWidget(self.hex_edit)
+        bar.addWidget(self.pick_btn)
+        bar.addStretch()
+        root.addLayout(bar)
+
+        self._select_color("#FFFFFF")
+
+    def _make_section_label(self, text):
+        lab = QLabel(text)
+        lab.setObjectName("miniSection")
+        return lab
+
+    def _choose_custom_color(self):
+        from PyQt6.QtWidgets import QColorDialog
+        dlg = QColorDialog(self)
+        dlg.setOption(QColorDialog.ColorDialogOption.DontUseNativeDialog, True)
+        cur = self.hex_edit.text() or "#FFFFFF"
+        dlg.setCurrentColor(QColor(cur if cur.startswith("#") else f"#{cur}"))
+        if dlg.exec():
+            self._select_color(dlg.currentColor().name().upper())
+
+    def _apply_hex_from_field(self):
+        txt = self.hex_edit.text().strip()
+        if not txt:
+            return
+        if not txt.startswith("#"):
+            txt = "#" + txt
+        self._select_color(txt.upper())
+
+    def _select_color(self, hexc: str):
+        if not hexc.startswith("#"):
+            hexc = "#" + hexc
+        hexc = hexc.upper()
+
+        self.preview.setStyleSheet(f"background:{hexc}; border-radius:4px;")
+        self.hex_edit.setText(hexc)
+
+        if hexc in self._recent:
+            self._recent.remove(hexc)
+        self._recent.insert(0, hexc)
+        self._recent = self._recent[:6]
+        self._rebuild_recent()
+
+        self.color_selected.emit(hexc[1:])
+
+    def _rebuild_recent(self):
+        while self.recent_wrap.count():
+            item = self.recent_wrap.takeAt(0)
+            w = item.widget()
+            if w:
+                w.setParent(None)
+
+        for hexc in self._recent:
+            b = QPushButton()
+            b.setObjectName("swatch")
+            b.setFixedSize(32, 22)
+            b.setToolTip(hexc)
+            b.setStyleSheet(f"background:{hexc};")
+            b.clicked.connect(lambda checked=False, c=hexc: self._select_color(c))
+            self.recent_wrap.addWidget(b)
 
 class ColorPicker(QWidget):    
     color_selected = pyqtSignal(str)
